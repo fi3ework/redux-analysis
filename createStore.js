@@ -29,7 +29,7 @@ import isPlainObject from './utils/isPlainObject'
  * and subscribe to changes.
  */
 export default function createStore (reducer, preloadedState, enhancer) {
-  // 当只有两个参数，且第二个参数为函数时，则实际传递的是enhancer而不是preloadedState
+  // 当只有两个参数，且第二个参数为函数时，则实际传递的是reducer和enhancer
   if (typeof preloadedState === 'function' && typeof enhancer === 'undefined') {
     enhancer = preloadedState
     preloadedState = undefined
@@ -55,7 +55,8 @@ export default function createStore (reducer, preloadedState, enhancer) {
   let nextListeners = currentListeners
   let isDispatching = false
 
-  // 如果nextListeners和currentListeners指向同一个对象，则将nextListeners单独复制一份出来
+  // 如果nextListeners和currentListeners指向同一个对象
+  // 则nextListeners对currentListeners进行深拷贝
   function ensureCanMutateNextListeners () {
     if (nextListeners === currentListeners) {
       nextListeners = currentListeners.slice()
@@ -68,6 +69,9 @@ export default function createStore (reducer, preloadedState, enhancer) {
    * @returns {any} The current state tree of your application.
    */
   function getState () {
+    // https://github.com/reactjs/redux/issues/1568
+    // 为了保持reducer的pure，禁止在reducer中调用getState
+    // 纯函数reducer要求根据一定的输入即能得到确定的输出，所以禁止了getState,subscribe,unsubscribe和dispatch
     if (isDispatching) {
       throw new Error(
         'You may not call store.getState() while the reducer is executing. ' +
@@ -185,9 +189,9 @@ export default function createStore (reducer, preloadedState, enhancer) {
           'Have you misspelled a constant?'
       )
     }
-    // 为了避免在reducer中奋发action的情况，因为这样做可能导致分发死循环，同时也增加了数据流动的复杂度
+    // 这个是为了避免在reducer中分发action的情况，因为这样做可能导致分发死循环，同时也增加了数据流动的复杂度
     // 因为dispatch使isDispatching变true，如果死循环就到不了finally了
-    // dispatch是同步的，所以不会同时出现两个dispatch在执行的情况
+    // ps: dispatch是同步的，所以不会同时出现两个dispatch在执行的情况
     if (isDispatching) {
       throw new Error('Reducers may not dispatch actions.')
     }
@@ -200,13 +204,21 @@ export default function createStore (reducer, preloadedState, enhancer) {
       isDispatching = false
     }
 
-    // 每次dispatch的时候要保证即使在dispatch的过程中有subscribe和unsubscribe，也要按照进入dispatch时的listeners执行，所以需要快照调用时的listeners
-    // 将nextListeners赋值给currentListeners，并依次执行listeners
-    // currentListeners和nextListeners两个缓存数组，是为了防止在dispatch的时候subscribe造成不可预测的结果
+    // 在这里体现了currentListeners和nextListeners的作用
+    // 一开始我以为currentListeners和nextListeners是为了避免在dispatch的过程中subscribe，但是在前面有isDispatching，所以不可能做subscribe等操作
+    // 然后我去翻了一下redux的commit message，找到了对listener做深拷贝的原因：https://github.com/reactjs/redux/issues/461
+    // 简单来说就是在listener中可能有unsubscribe函数，比如有3个listener，在第2个listener执行时unsubscribe了自己
+    // 那么第3个listener的下标就变成了1，但是for循环下一轮的下标是2，第3个listener就被跳过了
+    // 所以执行一次深拷贝，即使在listener过程中unsubscribe了也是更改的nextListeners，当前执行的currentListeners被保存了下来
+
     // redux在执行subscribe和unsubscribe的时候都要执行ensureCanMutateNextListeners来确定是否要进行一次深拷贝
     // 只要进行了一次dispatch，那么currentListeners === nextListeners，之后的subscribe和unsubscribe就必须深拷贝一次（因为nextListeners和currentListeners此时===）
-    // 否则可以一直对nextListeners操作而不需要从currentListeners深拷贝。
+    // 否则可以一直对nextListeners操作而不需要为currentListeners深拷贝赋值，即只在必要时深拷贝
     const listeners = (currentListeners = nextListeners)
+    // 这里使用for而不是forEach，是因为listeners是我们自己创造的，不存在稀疏组的情况，所有直接用for性能来得更好
+    // 见 https://github.com/reactjs/redux/commit/5b586080b43ca233f78d56cbadf706c933fefd19
+    // 附上Dan的原话：This is an optimization because forEach() has more complicated logic per spec to deal with sparse arrays. Also it's better to not allocate a function when we can easily avoid that.
+    // 这里没有缓存listeners.length，是因为Dan相信V8足够智能会自动缓存，相比手工缓存效果要来得更好
     for (let i = 0; i < listeners.length; i++) {
       // 这里将listener单独新建一个变量而不是listener[i]()
       // 是因为直接listeners[i]()会把listeners作为this泄漏，而赋值为listener()后this指向全局变量

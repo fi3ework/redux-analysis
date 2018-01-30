@@ -57,6 +57,12 @@ export default function applyMiddleware (...middlewares) {
       // 如果直接写成store.dispatch，在`dispatch = compose(...chain)(store.dispatch)`中
       // middlewareAPI.dispatch并没有得到更新，依旧是最老的
       // 我写了个模拟的调用，可以在 http://jsbin.com/fezitiwike/edit?js,console 上感受一下
+
+      // 还有，这里使用了...args而不是action，是因为有个PR https://github.com/reactjs/redux/pull/2560
+      // 这个PR的作者认为在dispatch时需要提供多个参数，像这样`dispatch(action, option)`
+      // 这种情况确实存在，但是只有当这个需提供多参数的中间件是第一个被调用的中间件时（即在middlewares数组中排最后）才有效
+      // 因为无法上一个调用这个多参数中间件的中间件是使用的`next(action)`或是`next(...args)`来调用
+      // 在这个PR的讨论中可以看到Dan对这个改动持保留意见
       dispatch: (...args) => dispatch(...args)
     }
     // 传入 {dispatch, getState}
