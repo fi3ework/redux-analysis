@@ -23,9 +23,9 @@ Redux的文件结构并不复杂，每个文件就是一个对外导出的函数
 
 直接写在代码的注释里了，在每个函数上方也有大段的官方注释来解释每个函数的作用，中文翻译可以见[Redux 中文文档](http://github.com/camsong/redux-in-chinese)
 
-在分析代码时通过Github blame，参考了Redux的issue及pr来分析。
+分析代码时通过Github blame，参考了Redux的issue及pr来分析函数的意图而不仅是从代码层面分析函数的作用。
 
-**推荐源码的阅读顺序为**
+**推荐源码的阅读顺序为：**
 
 ```
 index.js -> creatStore.js -> applyMiddleware.js (compose.js) -> combineReducers.js -> bindActionCreators.js

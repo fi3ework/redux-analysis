@@ -40,11 +40,11 @@ export default function createStore (reducer, preloadedState, enhancer) {
     if (typeof enhancer !== 'function') {
       throw new Error('Expected the enhancer to be a function.')
     }
-    // 如果穿入了applyMiddleware，则控制反转，交由enhancer来处理
+    // 如果穿入了applyMiddleware，则控制反转，交由enhancer来生成store
     return enhancer(createStore)(reducer, preloadedState)
   }
 
-  // 传入的reducer必须是一个纯函数，且是必须的参数
+  // 传入的reducer必须是一个纯函数，且是必填参数
   if (typeof reducer !== 'function') {
     throw new Error('Expected the reducer to be a function.')
   }
@@ -55,6 +55,7 @@ export default function createStore (reducer, preloadedState, enhancer) {
   let nextListeners = currentListeners
   let isDispatching = false
 
+  // 添加这个函数的意图在下面会讲到，先看代码层面上的作用：
   // 如果nextListeners和currentListeners指向同一个对象
   // 则nextListeners对currentListeners进行深拷贝
   function ensureCanMutateNextListeners () {
@@ -69,9 +70,9 @@ export default function createStore (reducer, preloadedState, enhancer) {
    * @returns {any} The current state tree of your application.
    */
   function getState () {
-    // https://github.com/reactjs/redux/issues/1568
+    // 参考：https://github.com/reactjs/redux/issues/1568
     // 为了保持reducer的pure，禁止在reducer中调用getState
-    // 纯函数reducer要求根据一定的输入即能得到确定的输出，所以禁止了getState,subscribe,unsubscribe和dispatch
+    // 纯函数reducer要求根据一定的输入即能得到确定的输出，所以禁止了getState,subscribe,unsubscribe和dispatch等会带来副作用的行为
     if (isDispatching) {
       throw new Error(
         'You may not call store.getState() while the reducer is executing. ' +
@@ -111,7 +112,7 @@ export default function createStore (reducer, preloadedState, enhancer) {
     if (typeof listener !== 'function') {
       throw new Error('Expected listener to be a function.')
     }
-
+    // 同上，保证纯函数不带来副作用
     if (isDispatching) {
       throw new Error(
         'You may not call store.subscribe() while the reducer is executing. ' +
@@ -132,6 +133,7 @@ export default function createStore (reducer, preloadedState, enhancer) {
         return
       }
 
+      // 同上，保证纯函数不带来副作用
       if (isDispatching) {
         throw new Error(
           'You may not unsubscribe from a store listener while the reducer is executing. ' +
@@ -141,9 +143,9 @@ export default function createStore (reducer, preloadedState, enhancer) {
 
       isSubscribed = false
 
-      // 在每次unsubscribe的时候，深拷贝一次currentListeners，再对nextListeners添加新的listener
+      // 在每次unsubscribe的时候，深拷贝一次currentListeners，再对nextListeners取消订阅当前listener
       ensureCanMutateNextListeners()
-      // 从nextListeners中去掉listener
+      // 从nextListeners中去掉unsubscribe的listener
       const index = nextListeners.indexOf(listener)
       nextListeners.splice(index, 1)
     }
@@ -189,9 +191,7 @@ export default function createStore (reducer, preloadedState, enhancer) {
           'Have you misspelled a constant?'
       )
     }
-    // 这个是为了避免在reducer中分发action的情况，因为这样做可能导致分发死循环，同时也增加了数据流动的复杂度
-    // 因为dispatch使isDispatching变true，如果死循环就到不了finally了
-    // ps: dispatch是同步的，所以不会同时出现两个dispatch在执行的情况
+    // 同上，保证纯函数不带来副作用
     if (isDispatching) {
       throw new Error('Reducers may not dispatch actions.')
     }
@@ -205,11 +205,11 @@ export default function createStore (reducer, preloadedState, enhancer) {
     }
 
     // 在这里体现了currentListeners和nextListeners的作用
-    // 一开始我以为currentListeners和nextListeners是为了避免在dispatch的过程中subscribe，但是在前面有isDispatching，所以不可能做subscribe等操作
-    // 然后我去翻了一下redux的commit message，找到了对listener做深拷贝的原因：https://github.com/reactjs/redux/issues/461
-    // 简单来说就是在listener中可能有unsubscribe函数，比如有3个listener，在第2个listener执行时unsubscribe了自己
+    // 我去翻了一下redux的commit message，找到了对listener做深拷贝的原因：https://github.com/reactjs/redux/issues/461
+    // 简单来说就是在listener中可能有unsubscribe操作，比如有3个listener(下标0,1,2)，在第2个listener执行时unsubscribe了自己
     // 那么第3个listener的下标就变成了1，但是for循环下一轮的下标是2，第3个listener就被跳过了
-    // 所以执行一次深拷贝，即使在listener过程中unsubscribe了也是更改的nextListeners，当前执行的currentListeners被保存了下来
+    // 所以执行一次深拷贝，即使在listener过程中unsubscribe了也是更改的nextListeners（nextListeners会去深拷贝currentListeners）
+    // 当前执行的currentListeners不会被修改，也就是所谓的快照
 
     // redux在执行subscribe和unsubscribe的时候都要执行ensureCanMutateNextListeners来确定是否要进行一次深拷贝
     // 只要进行了一次dispatch，那么currentListeners === nextListeners，之后的subscribe和unsubscribe就必须深拷贝一次（因为nextListeners和currentListeners此时===）
@@ -218,7 +218,7 @@ export default function createStore (reducer, preloadedState, enhancer) {
     // 这里使用for而不是forEach，是因为listeners是我们自己创造的，不存在稀疏组的情况，所有直接用for性能来得更好
     // 见 https://github.com/reactjs/redux/commit/5b586080b43ca233f78d56cbadf706c933fefd19
     // 附上Dan的原话：This is an optimization because forEach() has more complicated logic per spec to deal with sparse arrays. Also it's better to not allocate a function when we can easily avoid that.
-    // 这里没有缓存listeners.length，是因为Dan相信V8足够智能会自动缓存，相比手工缓存效果要来得更好
+    // 这里没有缓存listeners.length，Dan相信V8足够智能会自动缓存，相比手工缓存性能更好
     for (let i = 0; i < listeners.length; i++) {
       // 这里将listener单独新建一个变量而不是listener[i]()
       // 是因为直接listeners[i]()会把listeners作为this泄漏，而赋值为listener()后this指向全局变量
@@ -294,8 +294,9 @@ export default function createStore (reducer, preloadedState, enhancer) {
   // When a store is created, an "INIT" action is dispatched so that every
   // reducer returns their initial state. This effectively populates
   // the initial state tree.
-  // 当initailState和reducer的参数默认值都存在的时候，参数默认值将不起作用，
-  // 因为在调用初始化的action前就已经被赋值了initialState
+  // reducer对无法识别的action要返回state，就是要通过ActionTypes.INIT获取默认参数值并返回
+  // 当initailState和reducer的参数默认值都存在的时候，参数默认值将不起作用
+  // 因为在调用初始化的action前currState就已经被赋值了initialState
   // 同时这个initialState也是服务端渲染的初始状态入口
   dispatch({ type: ActionTypes.INIT })
 

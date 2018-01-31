@@ -8,7 +8,7 @@
  * from right to left. For example, compose(f, g, h) is identical to doing
  * (...args) => f(g(h(...args))).
  */
-
+// 官方说明已经很详细了
 export default function compose (...funcs) {
   if (funcs.length === 0) {
     return arg => arg
