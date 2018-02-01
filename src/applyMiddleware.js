@@ -73,6 +73,7 @@ export default function applyMiddleware (...middlewares) {
     // 相当于就是每个中间件在自己的过程中做一些操作，做完之后调用下一个中间件(next(action))
     dispatch = compose(...chain)(store.dispatch)
 
+    // 最终返回一个dispatch被修改了的store，这个dispatch串联起了中间件
     return {
       ...store,
       dispatch
