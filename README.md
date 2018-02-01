@@ -2,7 +2,7 @@
 
 **本文所分析的Redux版本为3.7.2**
 
-分析代码时通过查看Github blame，参考了Redux的issue及PR来分析各个函数的意图而不仅是从代码层面分析函数的作用，并且分析了很多细节层面上写法的原因，比如：
+分析代码时通过查看Github Blame，参考了Redux的issue及PR来分析各个函数的意图而不仅是从代码层面分析函数的作用，并且分析了很多细节层面上写法的原因，比如：
 
 1. `dispatch: (...args) => dispatch(…args)` 为什么不只传递一个 `action` ?
 
