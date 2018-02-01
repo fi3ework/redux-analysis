@@ -257,7 +257,14 @@ export default function createStore (reducer, preloadedState, enhancer) {
    * For more information, see the observable proposal:
    * https://github.com/tc39/proposal-observable
    */
-  // TODO:
+  // 实现了一个类似RxJS的订阅者模式
+  // 使用了symbol-observable这个模块来实现
+  // 这个功能的目的可以见这个issue https://github.com/reactjs/redux/issues/1631：
+  // 1. 增加了和RxJS等交互的可能性
+  // 2. 人们不会再问RxJS和redux的区别了
+  // 3. 现在可以有更可操作性的方法来向component传递state了
+  // 4. 这已经算是很小的改动了
+  // 这个我们平时无法用到，这是只对内暴露的方法，应该是提供给中间件一种更好的getState的方法
   function observable () {
     const outerSubscribe = subscribe
     return {
@@ -284,7 +291,6 @@ export default function createStore (reducer, preloadedState, enhancer) {
         const unsubscribe = outerSubscribe(observeState)
         return { unsubscribe }
       },
-
       [$$observable] () {
         return this
       }
@@ -294,7 +300,7 @@ export default function createStore (reducer, preloadedState, enhancer) {
   // When a store is created, an "INIT" action is dispatched so that every
   // reducer returns their initial state. This effectively populates
   // the initial state tree.
-  // reducer对无法识别的action要返回state，就是要通过ActionTypes.INIT获取默认参数值并返回
+  // reducer要求对无法识别的action返回state，就是因为需要通过ActionTypes.INIT获取默认参数值并返回
   // 当initailState和reducer的参数默认值都存在的时候，参数默认值将不起作用
   // 因为在调用初始化的action前currState就已经被赋值了initialState
   // 同时这个initialState也是服务端渲染的初始状态入口
